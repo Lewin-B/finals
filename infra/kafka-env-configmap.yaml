@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-env
+  namespace: data
+data:
+  KAFKA_BROKERS: kafka.data.svc.cluster.local:9092
+  KAFKA_TOPIC: finals-events
+  KAFKA_CLIENT_ID: finals-nextjs
+  KAFKA_SSL: "false"
+  KAFKA_SASL_MECHANISM: plain

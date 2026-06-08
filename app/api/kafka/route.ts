@@ -1,4 +1,8 @@
-import { sendKafkaJson } from "@/lib/kafka";
+import {
+  getDefaultKafkaTopic,
+  getKafkaStatus,
+  sendKafkaJson,
+} from "@/lib/kafka";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,9 +14,13 @@ type KafkaPostBody = {
 };
 
 export function GET() {
+  const status = getKafkaStatus();
+
   return Response.json({
-    brokersConfigured: Boolean(process.env.KAFKA_BROKERS),
-    defaultTopicConfigured: Boolean(process.env.KAFKA_TOPIC),
+    brokers: status.brokers,
+    clientId: status.clientId,
+    ssl: status.ssl,
+    topic: status.topic,
   });
 }
 
@@ -28,7 +36,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const topic = body.topic ?? process.env.KAFKA_TOPIC;
+  const topic = body.topic ?? getDefaultKafkaTopic();
 
   if (!topic) {
     return Response.json(
