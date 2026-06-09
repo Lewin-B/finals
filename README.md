@@ -2,16 +2,30 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+Create local X API configuration in `.env.local`:
+
+```bash
+X_BEARER_TOKEN=your-x-api-v2-bearer-token
+X_STREAM_RULE='("Jalen Brunson" OR Brunson OR @jalenbrunson1 OR #JalenBrunson) lang:en -is:retweet'
+X_RULE_TAG=jalen-brunson-v1
+```
+
+Configure the single X API v2 Filtered Stream rule:
+
+```bash
+curl -X POST http://localhost:3000/api/x
+```
+
+Read the stream:
+
+```bash
+curl -N http://localhost:3000/api/x/stream
+```
+
 First, run the development server:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+deno task dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
