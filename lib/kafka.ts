@@ -1,13 +1,18 @@
-import "server-only";
-
-import { Kafka, type KafkaConfig, logLevel, type Producer } from "kafkajs";
+import {
+  Kafka,
+  type KafkaConfig,
+  logLevel,
+  type Producer,
+  type Consumer,
+} from "kafkajs";
 
 const globalForKafka = globalThis as typeof globalThis & {
+  kafkaClient?: Kafka;
   kafkaProducerPromise?: Promise<Producer>;
 };
 
 export const defaultKafkaConfig = {
-  brokers: ["kafka.data.svc.cluster.local:9092"],
+  brokers: ["localhost:9092"],
   clientId: "finals-nextjs",
   ssl: false,
   topic: "finals-events",
@@ -48,8 +53,8 @@ function getSasl(): KafkaConfig["sasl"] {
   } as KafkaConfig["sasl"];
 }
 
-function createProducer() {
-  const kafka = new Kafka({
+function getKafkaClient() {
+  globalForKafka.kafkaClient ??= new Kafka({
     brokers: getBrokers(),
     clientId: process.env.KAFKA_CLIENT_ID ?? defaultKafkaConfig.clientId,
     logLevel: logLevel.ERROR,
@@ -58,6 +63,12 @@ function createProducer() {
       ? process.env.KAFKA_SSL === "true"
       : defaultKafkaConfig.ssl,
   });
+
+  return globalForKafka.kafkaClient;
+}
+
+function createProducer() {
+  const kafka = getKafkaClient();
 
   const producer = kafka.producer();
 
@@ -73,6 +84,10 @@ function createProducer() {
 export function getKafkaProducer() {
   globalForKafka.kafkaProducerPromise ??= createProducer();
   return globalForKafka.kafkaProducerPromise;
+}
+
+export function createKafkaConsumer(groupId: string): Consumer {
+  return getKafkaClient().consumer({ groupId });
 }
 
 export function getDefaultKafkaTopic() {

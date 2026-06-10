@@ -1,9 +1,13 @@
-import { sendKafkaJson } from "../kafka.ts";
+import {
+  type BrunsonTweetEvent,
+  getBrunsonTweetsTopic,
+  type SentimentLabel,
+} from "../brunson-events";
+import { sendKafkaJson } from "../kafka";
 
 const STREAM_RULES_URL = "https://api.twitter.com/2/tweets/search/stream/rules";
 const STREAM_URL =
-  "https://api.twitter.com/2/tweets/search/stream?tweet.fields=created_at,author_id,lang";
-const TOPIC = "brunson-tweets";
+  "https://api.twitter.com/2/tweets/search/stream?tweet.fields=created_at,author_id,lang&expansions=author_id&user.fields=username,name";
 
 const DEFAULT_RULE_VALUE = '(Jalen Brunson OR "Brunson") -is:retweet lang:en';
 const DEFAULT_RULE_TAG = "brunson-tweets";
@@ -68,13 +72,22 @@ type XTweet = {
   text: string;
 };
 
+type XUser = {
+  id: string;
+  username?: string;
+};
+
 type XStreamMessage = {
   data?: XTweet;
+  includes?: {
+    users?: XUser[];
+  };
   matching_rules?: XRule[];
 };
 
 type Sentiment = {
-  label: "negative" | "neutral" | "positive";
+  label: SentimentLabel;
+  matchedTerms: string[];
   negative: number;
   positive: number;
   score: number;
@@ -162,14 +175,17 @@ function scoreSentiment(text: string): Sentiment {
   const words = text.toLowerCase().match(/[a-z][a-z']*/g) ?? [];
   let positive = 0;
   let negative = 0;
+  const matchedTerms = new Set<string>();
 
   for (const word of words) {
     if (positiveWords.has(word)) {
       positive += 1;
+      matchedTerms.add(word);
     }
 
     if (negativeWords.has(word)) {
       negative += 1;
+      matchedTerms.add(word);
     }
   }
 
@@ -177,10 +193,20 @@ function scoreSentiment(text: string): Sentiment {
 
   return {
     label: score > 0 ? "positive" : score < 0 ? "negative" : "neutral",
+    matchedTerms: [...matchedTerms].sort(),
     negative,
     positive,
     score,
   };
+}
+
+function findAuthorUsername(message: XStreamMessage, authorId?: string) {
+  if (!authorId) {
+    return undefined;
+  }
+
+  return message.includes?.users?.find((user) => user.id === authorId)
+    ?.username;
 }
 
 async function publishTweet(message: XStreamMessage) {
@@ -189,21 +215,26 @@ async function publishTweet(message: XStreamMessage) {
   }
 
   const tweet = message.data;
+  const sentiment = scoreSentiment(tweet.text);
+  const event: BrunsonTweetEvent = {
+    authorId: tweet.author_id,
+    authorUsername: findAuthorUsername(message, tweet.author_id),
+    createdAt: tweet.created_at,
+    id: tweet.id,
+    matchedLexiconTerms: sentiment.matchedTerms,
+    matchingRuleTags: (message.matching_rules ?? [])
+      .map((rule) => rule.tag)
+      .filter((tag): tag is string => Boolean(tag)),
+    receivedAt: new Date().toISOString(),
+    sentimentLabel: sentiment.label,
+    sentimentScore: sentiment.score,
+    text: tweet.text,
+  };
 
   await sendKafkaJson({
     key: tweet.id,
-    topic: TOPIC,
-    value: {
-      id: tweet.id,
-      text: tweet.text,
-      authorId: tweet.author_id,
-      createdAt: tweet.created_at,
-      lang: tweet.lang,
-      matchingRules: message.matching_rules ?? [],
-      receivedAt: new Date().toISOString(),
-      sentiment: scoreSentiment(tweet.text),
-      source: "x-search-stream",
-    },
+    topic: getBrunsonTweetsTopic(),
+    value: event,
   });
 }
 

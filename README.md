@@ -8,6 +8,10 @@ Create local X API configuration in `.env.local`:
 X_BEARER_TOKEN=your-x-api-v2-bearer-token
 X_STREAM_RULE='("Jalen Brunson" OR Brunson OR @jalenbrunson1 OR #JalenBrunson) lang:en -is:retweet'
 X_RULE_TAG=jalen-brunson-v1
+ENABLE_BACKGROUND_WORKERS=true
+KAFKA_BROKERS=localhost:9092
+KAFKA_BRUNSON_TWEETS_TOPIC=brunson-tweets
+METRICS_WINDOW_MINUTES=15
 ```
 
 Configure the single X API v2 Filtered Stream rule:
@@ -21,6 +25,38 @@ Read the stream:
 ```bash
 curl -N http://localhost:3000/api/x/stream
 ```
+
+## Kafka Event and Metrics Flow
+
+The background producer reads the X filtered stream, enriches each tweet, and writes JSON to `KAFKA_BRUNSON_TWEETS_TOPIC` (`brunson-tweets` by default). The event shape is:
+
+```json
+{
+  "id": "tweet-id",
+  "text": "tweet text",
+  "authorId": "x-author-id",
+  "authorUsername": "x_username",
+  "createdAt": "2026-06-09T12:00:00.000Z",
+  "receivedAt": "2026-06-09T12:00:01.000Z",
+  "matchingRuleTags": ["jalen-brunson-v1"],
+  "sentimentLabel": "positive",
+  "sentimentScore": 2,
+  "matchedLexiconTerms": ["clutch", "mvp"]
+}
+```
+
+The dashboard consumer subscribes to the same topic with group id `brunson-dashboard-v1`, dedupes tweet ids in memory, and maintains rolling metrics for the latest `METRICS_WINDOW_MINUTES` window. The default window is 15 minutes, and the recent tweets list is capped at 50 items.
+
+Read the current in-memory metrics snapshot:
+
+```bash
+curl http://localhost:3000/api/metrics
+```
+
+Metrics are intentionally process-local for v1 and reset when the pod restarts.
+
+For Kubernetes deployments, use the in-cluster broker address from
+`infra/kafka-env-configmap.yaml` instead of `localhost:9092`.
 
 First, run the development server:
 

@@ -14,8 +14,12 @@ export async function register() {
   globalForBackgroundWorkers.backgroundWorkersStarted = true;
 
   const { startTwitterProducerWorker } = await import(
-    "./lib/background-workers/twitter-producer.ts"
+    "./lib/background-workers/twitter-producer"
+  );
+  const { startBrunsonDashboardConsumerWorker } = await import(
+    "./lib/background-workers/brunson-dashboard-consumer"
   );
 
   void startTwitterProducerWorker();
+  void startBrunsonDashboardConsumerWorker();
 }
