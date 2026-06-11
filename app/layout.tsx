@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Brunson Pulse",
-  description: "Live Jalen Brunson sentiment dashboard",
+  title: "is this your king?",
+  description: "Live Jalen Brunson sentiment meter",
 };
 
 export default function RootLayout({
