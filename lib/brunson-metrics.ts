@@ -8,6 +8,20 @@ type MetricsState = {
   events: BrunsonTweetEvent[];
   seenOrder: string[];
   seenTweetIds: Set<string>;
+  subscribers: Set<(snapshot: BrunsonMetricsSnapshot) => void>;
+};
+
+export type BrunsonMetricsSnapshot = {
+  averageSentimentScore: number;
+  metricsWindowMinutes: number;
+  recentTweets: BrunsonTweetEvent[];
+  recentTweetsLimit: number;
+  sentimentCounts: Record<SentimentLabel, number>;
+  topLexiconTerms: {
+    count: number;
+    term: string;
+  }[];
+  totalTweets: number;
 };
 
 const globalForMetrics = globalThis as typeof globalThis & {
@@ -19,6 +33,7 @@ function getState() {
     events: [],
     seenOrder: [],
     seenTweetIds: new Set<string>(),
+    subscribers: new Set<(snapshot: BrunsonMetricsSnapshot) => void>(),
   };
 
   return globalForMetrics.brunsonMetricsState;
@@ -69,11 +84,12 @@ export function ingestBrunsonTweetEvent(event: BrunsonTweetEvent) {
   rememberTweetId(event.id);
   state.events.push(event);
   pruneEvents(Date.now());
+  publishSnapshot();
 
   return true;
 }
 
-export function getBrunsonMetricsSnapshot() {
+export function getBrunsonMetricsSnapshot(): BrunsonMetricsSnapshot {
   pruneEvents(Date.now());
 
   const state = getState();
@@ -112,5 +128,27 @@ export function getBrunsonMetricsSnapshot() {
     sentimentCounts,
     topLexiconTerms,
     totalTweets: state.events.length,
+  };
+}
+
+function publishSnapshot() {
+  const state = getState();
+  const snapshot = getBrunsonMetricsSnapshot();
+
+  for (const subscriber of state.subscribers) {
+    subscriber(snapshot);
+  }
+}
+
+export function subscribeToBrunsonMetricsSnapshots(
+  subscriber: (snapshot: BrunsonMetricsSnapshot) => void,
+) {
+  const state = getState();
+
+  state.subscribers.add(subscriber);
+  subscriber(getBrunsonMetricsSnapshot());
+
+  return () => {
+    state.subscribers.delete(subscriber);
   };
 }
